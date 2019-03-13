@@ -7,7 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 //using ToolGood.Words;
 
-namespace BallBall.Chat.Common
+namespace Ccy.Chat.Common
 {
     /// <summary>
     /// 敏感词组件
