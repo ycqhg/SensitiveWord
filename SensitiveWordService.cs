@@ -1,5 +1,4 @@
-﻿using BallBall.Chat.Model;
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -61,10 +60,27 @@ namespace Ccy.Chat.Common
         //}
         #endregion
 
+        public string Replace(string text, char replaceChar = '*')
+        {
+            if (text == null)
+            {
+                return text;
+            }
+            int textLength = text.Length;
+            if (textLength == 0)
+            {
+                return text;
+            }
+
+            return Replace(text, textLength, replaceChar);
+        }
+
         #region 增强
         private static Dictionary<int, Dictionary<string, int>> WordParticiple { get; set; }
 
         private static List<int> WordLenLst { get; set; }
+
+        private static int WordLenLstCount = 0;
 
         private static Dictionary<int, char> Punctuation = new Dictionary<int, char>();
         public void InitWordParticiple()
@@ -76,7 +92,7 @@ namespace Ccy.Chat.Common
             {
                 var lenGroupLst = lst.FindAll((d) => d.Len == len);
                 Dictionary<string, int> dic = null;
-                if (IsExists(lenGroupLst))
+                if (IsExistsLetter(lenGroupLst))
                 {
                     dic = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
                 }
@@ -91,9 +107,10 @@ namespace Ccy.Chat.Common
                 }
                 WordParticiple.Add(len, dic);
             }
+            WordLenLstCount = WordLenLst.Count;
         }
 
-        private bool IsExists(List<WordInfo> lst)
+        private bool IsExistsLetter(List<WordInfo> lst)
         {
             foreach (var wordInfo in lst)
             {
@@ -105,63 +122,85 @@ namespace Ccy.Chat.Common
             return false;
         }
 
-        public string Replace(string text, char replaceChar = '*')
+        /// <summary>
+        /// 过滤
+        /// </summary>
+        /// <param name="text"></param>
+        /// <param name="replaceChar"></param>
+        /// <returns></returns>
+        private string Replace(string text, int textLength, char replaceChar)
         {
-            if (text.IsNullOrWhiteSpace())
-            {
-                return text;
-            }
             StringBuilder sb = new StringBuilder();
             Dictionary<int, char> punctuation = null;
             int newTextLen = 0;
-            int textLength = text.Length;
             int firstIdx = 0;
             string str = null;
 
-            FilterWordMaxLen(text, str, textLength, GetWordFirstLen(textLength, out firstIdx), sb, ref punctuation, out newTextLen);
-
-            text = sb.ToString();
-
-            for (int m = firstIdx + 1; m < WordLenLst.Count; m++)
+            if (!FilterWordMaxLen(text, str, textLength, GetWordFirstLen(textLength, out firstIdx), sb, ref punctuation, out newTextLen, replaceChar))
             {
-                int len = WordLenLst[m];
-                var dic = WordParticiple[len];
-                for (int i = 0; i < newTextLen; i++)
+                if (newTextLen == 0)
                 {
-                    if ((i + len) > newTextLen)
-                    {
-                        break;
-                    }
+                    return text;
+                }
+                text = sb.ToString();
 
-                    str = text.Substring(i, len);
-
-                    if (dic.ContainsKey(str))
+                for (int m = firstIdx + 1; m < WordLenLstCount; m++)
+                {
+                    int len = WordLenLst[m];
+                    var dic = WordParticiple[len];
+                    for (int i = 0; i < newTextLen; i++)
                     {
-                        //替换
-                        for (int k = i; k < i + len; k++)
+                        if ((i + len) > newTextLen)
                         {
-                            sb[k] = replaceChar;
+                            break;
                         }
-                        //位移到下一块索引开始
-                        i += len - 1;
+
+                        str = text.Substring(i, len);
+
+                        if (dic.ContainsKey(str))
+                        {
+                            //替换
+                            for (int k = i; k < i + len; k++)
+                            {
+                                sb[k] = replaceChar;
+                            }
+                            //位移到下一块索引开始
+                            i += len - 1;
+                        }
                     }
                 }
-            }
 
-            if (punctuation != null)
-            {
-                foreach (var item in punctuation)
+                if (punctuation != null)
                 {
-                    sb.Insert(item.Key, item.Value);
+                    foreach (var item in punctuation)
+                    {
+                        sb.Insert(item.Key, item.Value);
+                    }
                 }
-            }
 
-            text = null;
+                text = null;
+            }
 
             return sb.ToString();
         }
 
-        private void FilterWordMaxLen(string text, string str, int textLength, int wordMaxLen, StringBuilder sb, ref Dictionary<int, char> punctuation, out int newTextLen, char replaceChar = '*')
+        private int GetWordFirstLen(int textLength, out int idx)
+        {
+            idx = 0;
+            int firstLen = 0;
+            for (int i = 0; i < WordLenLstCount; i++)
+            {
+                firstLen = WordLenLst[i];
+                if (firstLen <= textLength)
+                {
+                    idx = i;
+                    break;
+                }
+            }
+            return firstLen;
+        }
+
+        private bool FilterWordMaxLen(string text, string str, int textLength, int wordMaxLen, StringBuilder sb, ref Dictionary<int, char> punctuation, out int newTextLen, char replaceChar)
         {
             newTextLen = 0;
             int subMum = 0;
@@ -179,10 +218,12 @@ namespace Ccy.Chat.Common
                 if (dic.ContainsKey(str))
                 {
                     sb.Append(replaceChar, wordMaxLen);
-                    newTextLen += wordMaxLen;
-                    //位移到下一块索引开始
-                    i += wordMaxLen - 1;
-                    subMum = i + 1;
+                    str = null;
+                    return true;
+                    //newTextLen += wordMaxLen;
+                    ////位移到下一块索引开始
+                    //i += wordMaxLen - 1;
+                    //subMum = i + 1;
                 }
                 else
                 {
@@ -204,7 +245,7 @@ namespace Ccy.Chat.Common
                 }
             }
 
-            if (subMum < textLength)
+            if (subMum > 0 && subMum < textLength)
             {
                 for (int i = subMum; i < textLength; i++)
                 {
@@ -226,6 +267,7 @@ namespace Ccy.Chat.Common
             }
 
             str = null;
+            return false;
         }
 
         private bool IsPunctuation(char c)
@@ -236,22 +278,6 @@ namespace Ccy.Chat.Common
                 Char.IsSeparator(c) ||
                 Char.IsSymbol(c);
 
-        }
-
-        private int GetWordFirstLen(int textLength, out int idx)
-        {
-            idx = 0;
-            int firstLen = 0;
-            for (int i = 0, count = WordLenLst.Count; i < count; i++)
-            {
-                firstLen = WordLenLst[i];
-                if (firstLen <= textLength)
-                {
-                    idx = i;
-                    break;
-                }
-            }
-            return firstLen;
         }
         #endregion
     }
